@@ -114,8 +114,8 @@ class DeepPlace:
         self.board = np.zeros(shape=(width, height), dtype=float)
         self.indexboard =  [[-1 for _ in range(width)] for _ in range(height)]
         self.indexboardshape =  [['' for _ in range(self.width)] for _ in range(self.height)]
-        #self.dir_prefix = "test_data/block_"
-        self.dir_prefix = "train_test_data/block_"
+        self.dir_prefix = "test_data/block_"
+        #self.dir_prefix = "train_test_data/block_"
 
         self.state_size = self.width * self.height *2 
 
