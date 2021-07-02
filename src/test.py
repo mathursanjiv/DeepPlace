@@ -11,11 +11,11 @@ from tabulate import tabulate
 import pickle as pk
 
 parser = argparse.ArgumentParser("""Implementation of Deep Q Network for block placement""")
-parser.add_argument("--width", type=int, default=100, help="The common width for all images")
-parser.add_argument("--height", type=int, default=100, help="The common height for all images")
+parser.add_argument("--width", type=int, default=20, help="The common width for all images")
+parser.add_argument("--height", type=int, default=20, help="The common height for all images")
 parser.add_argument("--numofgames", type=int, default=100, help="Number of placement")
 parser.add_argument("--discount", type=float, default=0.95)
-parser.add_argument("--save_interval", type=int, default=1000000000)
+parser.add_argument("--save_interval", type=int, default=100000000000)
 parser.add_argument("--replay_interval", type=int, default=10)
 parser.add_argument("--saved_path", type=str, default="trained_models")
 parser.add_argument("--load_model", type=int, default=1)
@@ -89,10 +89,6 @@ color_list = []
 for _ in range(10000):
     color_list.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 color_list.append((0, 0, 0))
-green = (156, 204, 101)
-blue = (0, 0, 255)
-yellow = (255, 255, 0)
-brown = (100, 130, 255)
 black = (0, 0, 0)
 white = (255, 255, 255)
 
@@ -107,13 +103,25 @@ def is_occupied(shape, anchor, board):
             return True
     return False
 
+def get_action_index(x, y, width, height, rotation):
+    return (width*height*rotation) + y*width + x
+
+def get_action_position(action_index, width, height):
+    rotation = action_index//(width*height)
+    action_index = action_index%(width*height)
+    y = action_index//width
+    action_index = action_index%width
+    x = action_index
+    return (x, y, rotation)
+
+
+# Environment
 class DeepPlace:
     def __init__(self, width, height):
         self.width = width
         self.height = height
         self.board = np.zeros(shape=(width, height), dtype=float)
         self.indexboard =  [[-1 for _ in range(width)] for _ in range(height)]
-        self.indexboardshape =  [['' for _ in range(self.width)] for _ in range(self.height)]
         self.dir_prefix = "test_data/block_"
         #self.dir_prefix = "train_test_data/block_"
 
@@ -209,13 +217,11 @@ class DeepPlace:
         return reward, done
 
     def reset(self):
-        self.time = 0
         self.score = 0
         self._reset_piece()
         self._parse_shape()
         self.board = np.zeros_like(self.board)
         self.indexboard =  [[-1 for _ in range(self.width)] for _ in range(self.height)]
-        self.indexboardshape =  [['' for _ in range(self.width)] for _ in range(self.height)]
 
         initBoard = pk.load(open(self.dir_prefix + str(args.filename) + ".pkl", "rb"))
 
@@ -223,7 +229,9 @@ class DeepPlace:
             for j in range(self.height):
                 self.board[i, j] = initBoard[i][j]
 
-        return np.array([0 for _ in range(self.state_size)])
+
+        return np.stack((self.board, np.array([[0 for _ in range(self.width)] for _ in range(self.height)])), axis=-1).flatten()
+
 
     def _set_piece(self, on):
         """To lock a piece in the board"""
@@ -245,7 +253,6 @@ class DeepPlace:
                 x, y = i + self.anchor[0], j + self.anchor[1]
                 if x < self.width and x >= 0 and y < self.height and y >= 0:
                     self.indexboard[int(self.anchor[0] + i)][int(self.anchor[1] + j)] = self.shape_index
-                    self.indexboardshape[int(self.anchor[0] + i)][int(self.anchor[1] + j)] = self.shape
                 else:
                     pass
                     # print(x, y, self.width, self.height)
@@ -287,43 +294,21 @@ class DeepPlace:
         return np.stack((board, connections), axis=-1).flatten()
 
 
-    def get_next_states(self):
-        """To get all possible state from current shape"""
-        old_shape = self.shape
-        old_anchor = self.anchor
-        states = {}
-        max_x = int(max([s[0] for s in self.shape]))
-        min_x = int(min([s[0] for s in self.shape]))
-        max_y = int(max([s[1] for s in self.shape]))
-        min_y = int(min([s[1] for s in self.shape]))
-        rotations = 2
-        if max_x - min_x == max_y - min_y:
-            rotations = 1
-
+    def get_next_actions(self):
+        """To get all possible actions from current state"""
         # Loop to try each posibilities
+
+        cur_shape = self.shape
+        rotations = 2
+        action_mask = [0 for _ in range(self.width*self.height*rotations)]
+
         for rotation in range(rotations):
-            max_x = int(max([s[0] for s in self.shape]))
-            min_x = int(min([s[0] for s in self.shape]))
-            max_y = int(max([s[1] for s in self.shape]))
-            min_y = int(min([s[1] for s in self.shape]))
-
-
-            for x in range(abs(min_x), self.width - max_x):
-                # Try current position
-                pos = [x, 0]
-
-                while(pos[1] < self.height):
-                    if(not is_occupied(self.shape, pos, self.board)):
-                        self.anchor = pos
-                        self._set_piece(True)
-                        states[(x, pos[1], rotation)] = self.get_current_state(self.board[:])
-                        self._set_piece(False)
-                        self.anchor = old_anchor
-                    pos[1] += 1
-
-            self.shape = rotated(self.shape)
-        self.shape = old_shape
-        return states
+            for x in range(0, self.width):
+                for y in range(0, self.height):
+                    if(not is_occupied(cur_shape, (x, y), self.board)):
+                        action_mask[get_action_index(x, y, self.width, self.height, rotation)] = 1
+            cur_shape = rotated(cur_shape)
+        return action_mask
 
     def render(self, score, string=None, view=0):
 
@@ -338,11 +323,6 @@ class DeepPlace:
         indexboard = indexboard.reshape(-1,1)
         unique_vals = np.unique(indexboard)
 
-        #board1 = [[green if len(self.indexboardshape[i][j]) >= 12 else black for j in range(self.width)] for i in range(self.height)]
-        #board2 = [[blue if len(self.indexboardshape[i][j]) < 12 else board1[i][j] for j in range(self.width)] for i in range(self.height)]
-        #board3 = [[yellow if len(self.indexboardshape[i][j]) <= 4 else board2[i][j] for j in range(self.width)] for i in range(self.height)]
-        #board4 = [[brown if len(self.indexboardshape[i][j]) <= 1 else board3[i][j] for j in range(self.width)] for i in range(self.height)]
-        #board = [[black if len(self.indexboardshape[i][j]) == '' else board4[i][j] for j in range(self.width)] for i in range(self.height)]
 
         board = np.array(self.indexboard)[:]
         board = [[color_list[board[i][j]] for j in range(self.width)] for i in range(self.height)]
@@ -424,7 +404,7 @@ env = DeepPlace(args.width, args.height)
 max_episode = args.numofgames
 max_steps = args.width * args.height * 8 # 8 orientations
 
-agent = Agent(env.state_size, args.numofgames, args.discount)
+agent = Agent(args.width, args.height, 2, 2, args.numofgames, args.discount) # 2 layers in convolution and #orientations
 agent.epsilon = 0
 
 if(args.load_model):
@@ -434,7 +414,6 @@ if(args.load_model):
 
 episodes = []
 rewards = []
-
 current_max = 0
 
 for episode in range(max_episode):
@@ -444,7 +423,7 @@ for episode in range(max_episode):
     total_reward = 0
     env._new_piece()
     print("Running episode " + str(episode))
-    ageny_memory = []
+    agent_memory = []
 
     while not done and steps < max_steps:   
         # Render the board for visualization
@@ -452,39 +431,32 @@ for episode in range(max_episode):
 
         #print("Running step " + str(steps))
 
-        # Get all possible tetromino placement in current board
-        next_states = env.get_next_states()
+        # Get all possible tetromino placement actions in the current board
+        action_mask = env.get_next_actions()
 
-        # If the dict is empty, meaning game is over
-        if not next_states:
-            next_state = env.reset()
+        # If all entries are 0, meaning no action possible
+        if sum(action_mask) == 0:
             done = True
             reward = -1
             total_reward += reward
-            ageny_memory.append([current_state, next_state, reward, done])
+            agent_memory.append([current_state, 0, reward, current_state, done])
             break
             
-        # Tell agent to choose the best possible state
-        #print('Getting best action')
-        best_state = agent.act(next_states.values())
-        #print('Got.')
+        # Tell agent to choose the best possible action
+        best_action = agent.act(current_state, np.array(action_mask))
 
-        # Grab best tetromino position and its rotation chosen by the agent
-        best_action = None
-        for action, state in next_states.items():
-            if (best_state==state).all():
-                best_action = action
-                break
-
-        reward, done = env.step(best_action)
+        reward, done = env.step(get_action_position(best_action, env.width, env.height))
         total_reward += reward
         #print('Current Reward = {}', reward)
 
+        next_state = env.get_current_state(env.board)
+
+
         # Add to memory for replay
-        ageny_memory.append((current_state, next_states[best_action], reward, done))
+        agent_memory.append((current_state, best_action, reward, next_state, done))
 
         # Set current new state 
-        current_state = next_states[best_action]
+        current_state = next_state
 
         steps += 1
 
@@ -492,13 +464,14 @@ for episode in range(max_episode):
     episodes.append(episode)
     rewards.append(total_reward)
 
+    reward_adjustment_factor = agent_memory[len(agent_memory) -1][2]*(args.discount**(len(agent_memory) -1))
+
+
     # Only train using equal or better results. 
     if(total_reward >= rewards[0]):
-        for current_state, next_state, reward, done in ageny_memory:
-            agent.add_to_memory(current_state, next_state, reward, done)
-
-    #if(episode == 0):
-    #    agent.epsilon = 1.0
+        for current_state, action, reward, next_state, done in agent_memory:
+            agent.add_to_memory(current_state, action, reward_adjustment_factor, next_state, done)
+            reward_adjustment_factor/= args.discount
 
     if((episode+1)%args.replay_interval==0):
         print("Best WL: ", max(rewards)*1000, "Best WL episode: ", rewards.index(max(rewards)) + 1)

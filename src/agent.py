@@ -6,10 +6,15 @@ from collections import deque
 import numpy as np
 import random
 import sys
+import tensorflow as tf
 
 class Agent:
-	def __init__(self, state_size, epsilon_episodes, discount=0.95):
-		self.state_size = state_size
+	def __init__(self, width, height, layers, num_of_orientations, epsilon_episodes, discount=0.95):
+		self.state_size = height*width*layers
+		self.height = height
+		self.width = width
+		self.layers = layers
+		self.number_of_actions = width*height*num_of_orientations
 		self.memory = deque(maxlen=30000)
 		self.discount = discount
 		self.epsilon = 1.0
@@ -22,37 +27,38 @@ class Agent:
 
 		self.model = self.build_model()
 
+
 	def build_model(self):
 		model = keras.Sequential([
-				Reshape((20, 20, 2), input_shape=(self.state_size,)),
+				Reshape((self.width, self.height, self.layers), input_shape=(self.state_size,)),
 				Conv2D(4, 3, activation='relu', kernel_initializer='glorot_uniform'),
 				Conv2D(8, 3, activation='relu', kernel_initializer='glorot_uniform'),
 				Flatten(),
-				#Dense(128, activation='relu', kernel_initializer='glorot_uniform'),
+				Dense(128, activation='relu', kernel_initializer='glorot_uniform'),
 				Dense(64, activation='relu', kernel_initializer='glorot_uniform'),
 				Dense(32, activation='relu', kernel_initializer='glorot_uniform'),
-				Dense(1, activation='linear')
+				Dense(self.number_of_actions, activation='linear')
 		])
 
+		# model.compile(loss=tf.keras.losses.Huber(delta=1.0), optimizer='adam')
 		model.compile(loss='mse', optimizer='adam')
 		return model
 
-	def add_to_memory(self, current_state, next_state, reward, done):
-		self.memory.append([current_state, next_state, reward, done])
+	def add_to_memory(self, current_state, action, reward, next_state, done):
+		self.memory.append([current_state, action, reward, next_state, done])
 
-	def act(self, states):
+	def act(self, state, action_mask):
 		max_value = -sys.maxsize - 1
 		best = None
 
 		if random.random() <= self.epsilon:
-			return random.choice(list(states))
+			return np.random.choice(np.nonzero(action_mask)[0])
 		else:
-			for state in states:
-				value = self.model.predict(np.reshape(state, [1, self.state_size]))
-				if value > max_value:
-					max_value = value
-					best = state
-		
+			action_q_values = self.model.predict(np.reshape(state, [1, self.state_size]))
+			masked_q_values = action_q_values*(action_mask)
+			best = np.argmax(masked_q_values)
+	
+		# returns action index
 		return best
 
 	def replay(self):
@@ -65,23 +71,31 @@ class Agent:
 
 		batch = self.memory
 
-		next_states = np.array([s[1] for s in batch])
-		next_qvalue = np.array([s[0] for s in self.model.predict(next_states)])
+		actions = [s[1] for s in batch]
+		rewards = [s[2] for s in batch]
+		dones = [s[4] for s in batch]
+		current_q_values = self.model.predict(np.array([s[0] for s in batch])).tolist()
+		next_q_values = self.model.predict(np.array([s[3] for s in batch])).tolist()
 
-		x = []
+		x = [s[0] for s in batch]
 		y = []
 
+		for i in range(len(actions)):
+			action = actions[i]
+			reward = rewards[i]
+			done = dones[i]
+			current_q_value = current_q_values[i]
+			next_q_value = next_q_values[i]
 
-		for i in range(len(batch)):
-			state, _, reward, done = batch[i][0], None, batch[i][2], batch[i][3]
-			new_q = reward
-			#if not done:
-			#	new_q = reward + self.discount * next_qvalue[i]
-			#else:
-			#	new_q = reward
+			if done:
+				current_q_value[action] = reward
+			else:
+				current_q_value[action] = self.epsilon*reward + (1-self.epsilon)*self.discount*max(next_q_value)
 
-			x.append(state)
-			y.append(new_q)
+			current_q_value[action] = max(-1, current_q_value[action])
+			current_q_value[action] = min(0, current_q_value[action])
+
+			y.append(current_q_value)
 
 		self.model.fit(np.array(x), np.array(y), batch_size=self.batch_size, epochs=self.epochs, verbose=0)
 		self.memory = deque(maxlen=30000)
