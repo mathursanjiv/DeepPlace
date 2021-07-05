@@ -192,6 +192,8 @@ for i in range(trainSize):
     writeBlocks("train_data/", "max", i, initialBlock, blocks, connGraphsMax)
 
 
+
+
 testSize = args.test_size
 print("Generating test data.")
 for i in range(testSize):

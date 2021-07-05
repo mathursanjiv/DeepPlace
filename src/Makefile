@@ -17,7 +17,6 @@ gen:
 	python3 generate.py --grid_size=$(W) --train_size=$(runs)
 
 clean:
-	rm -rf images/*
 	rm -rf train_data/*
 	rm -rf test_data/*
 	rm -rf results

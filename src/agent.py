@@ -7,6 +7,10 @@ import numpy as np
 import random
 import sys
 import tensorflow as tf
+import pandas as pd
+
+MIN_REWARD = -1000
+MAX_REWARD = 1000
 
 class Agent:
 	def __init__(self, width, height, layers, num_of_orientations, epsilon_episodes, discount=0.95):
@@ -77,6 +81,7 @@ class Agent:
 		current_q_values = self.model.predict(np.array([s[0] for s in batch])).tolist()
 		next_q_values = self.model.predict(np.array([s[3] for s in batch])).tolist()
 
+
 		x = [s[0] for s in batch]
 		y = []
 
@@ -92,8 +97,8 @@ class Agent:
 			else:
 				current_q_value[action] = self.epsilon*reward + (1-self.epsilon)*self.discount*max(next_q_value)
 
-			current_q_value[action] = max(-1, current_q_value[action])
-			current_q_value[action] = min(0, current_q_value[action])
+			current_q_value[action] = max(MIN_REWARD, current_q_value[action])
+			current_q_value[action] = min(MAX_REWARD, current_q_value[action])
 
 			y.append(current_q_value)
 

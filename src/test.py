@@ -10,6 +10,9 @@ import random
 from tabulate import tabulate
 import pickle as pk
 
+MIN_REWARD = -1000
+MAX_REWARD = 1000
+
 parser = argparse.ArgumentParser("""Implementation of Deep Q Network for block placement""")
 parser.add_argument("--width", type=int, default=20, help="The common width for all images")
 parser.add_argument("--height", type=int, default=20, help="The common height for all images")
@@ -208,7 +211,7 @@ class DeepPlace:
         if len(self.shape_list)==0:
 
             # print(tabulate(self.indexboard))
-            reward -= self._calculate_wirelength()/1000
+            reward += MAX_REWARD - self._calculate_wirelength()
             self.reset()
             done = True
         else:
@@ -437,7 +440,7 @@ for episode in range(max_episode):
         # If all entries are 0, meaning no action possible
         if sum(action_mask) == 0:
             done = True
-            reward = -1
+            reward = MIN_REWARD
             total_reward += reward
             agent_memory.append([current_state, 0, reward, current_state, done])
             break
