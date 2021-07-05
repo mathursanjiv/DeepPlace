@@ -85,7 +85,7 @@ def file_parser(filename='block.txt'):
 
     print("Parsed File:", filename)
     print("numberOfMacros:", numberOfMacros, "numberOfEdges:", numberOfEdges, "OptimalWL:", OptimalWL, "\n")
-    return shapes, adjency_matrix, adjency_list
+    return shapes, adjency_matrix, adjency_list, numberOfMacros, numberOfEdges
 
 
 color_list = []
@@ -160,7 +160,7 @@ class DeepPlace:
         return abs(x1-y1) + abs(x2-y2)
 
     def _parse_shape(self):
-        self.shapes, self.adjency_matrix, self.adjency_list = file_parser(self.dir_prefix + str(args.filename) + ".txt")
+        self.shapes, self.adjency_matrix, self.adjency_list, self.numberOfMacros, self.numberOfEdges = file_parser(self.dir_prefix + str(args.filename) + ".txt")
         self.shape_list = list(self.shapes.keys())
 
     def _calculate_wirelength(self):
@@ -211,7 +211,7 @@ class DeepPlace:
         if len(self.shape_list)==0:
 
             # print(tabulate(self.indexboard))
-            reward += MAX_REWARD - self._calculate_wirelength()
+            reward += MAX_REWARD - (self._calculate_wirelength()/(self.numberOfEdges*self.numberOfMacros))
             self.reset()
             done = True
         else:
