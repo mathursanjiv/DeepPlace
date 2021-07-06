@@ -10,6 +10,7 @@ import cv2 as cv
 import random
 from tabulate import tabulate
 import pickle as pk
+import os
 
 REWARD_FOR_MIN_PLACEMENT = 900
 REWARD_FOR_MAX_PLACEMENT = 100
@@ -429,7 +430,12 @@ for episode in range(start_episode, max_episode):
     for fplan_type in ["min", "max"]:
 
         env.filename = fplan_type + str(episode)
+        if not os.path.exists("train_data/" + env.filename + ".txt"):
+            continue
         current_state = env.reset()
+        if env.numberOfEdges < 1:
+            continue
+
         done = False
         steps = 0
         total_reward = 0
@@ -462,14 +468,14 @@ for episode in range(start_episode, max_episode):
             total_reward += reward
 
             # Add to memory for replay
-            if fplan_type == "min":
-                reward_adjust = REWARD_FOR_MIN_PLACEMENT
-            else:
-                reward_adjust = REWARD_FOR_MAX_PLACEMENT
+            # if fplan_type == "min":
+            #     reward_adjust = REWARD_FOR_MIN_PLACEMENT
+            # else:
+            #     reward_adjust = REWARD_FOR_MAX_PLACEMENT
 
             next_state = env.get_current_state(env.board)
 
-            agent_memory.append([current_state, best_action, reward_adjust, next_state, done])
+            agent_memory.append([current_state, best_action, reward, next_state, done])
 
             # Set current new state 
             current_state = next_state

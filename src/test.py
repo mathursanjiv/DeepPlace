@@ -208,16 +208,17 @@ class DeepPlace:
         self._set_piece(True)
         self._set_index_piece()
 
+        wl = self._calculate_wirelength()
         if len(self.shape_list)==0:
 
             # print(tabulate(self.indexboard))
-            reward += MAX_REWARD - (self._calculate_wirelength()/(self.numberOfEdges*self.numberOfMacros))
+            reward += MAX_REWARD - (wl/(self.numberOfEdges*self.numberOfMacros))
             self.reset()
             done = True
         else:
             self._new_piece()
 
-        return reward, done
+        return reward, done, wl
 
     def reset(self):
         self.score = 0
@@ -417,6 +418,7 @@ if(args.load_model):
 
 episodes = []
 rewards = []
+WLs = []
 current_max = 0
 
 for episode in range(max_episode):
@@ -427,6 +429,7 @@ for episode in range(max_episode):
     env._new_piece()
     print("Running episode " + str(episode))
     agent_memory = []
+    wl = 0
 
     while not done and steps < max_steps:   
         # Render the board for visualization
@@ -448,7 +451,7 @@ for episode in range(max_episode):
         # Tell agent to choose the best possible action
         best_action = agent.act(current_state, np.array(action_mask))
 
-        reward, done = env.step(get_action_position(best_action, env.width, env.height))
+        reward, done, wl = env.step(get_action_position(best_action, env.width, env.height))
         total_reward += reward
         #print('Current Reward = {}', reward)
 
@@ -463,9 +466,10 @@ for episode in range(max_episode):
 
         steps += 1
 
-    print("Total reward: " + str(total_reward))
+    print("Total reward: " + str(total_reward) + " Wire length " + str(wl))
     episodes.append(episode)
     rewards.append(total_reward)
+    WLs.append(wl)
 
     reward_adjustment_factor = agent_memory[len(agent_memory) -1][2]*(args.discount**(len(agent_memory) -1))
 
@@ -477,7 +481,7 @@ for episode in range(max_episode):
             reward_adjustment_factor/= args.discount
 
     if((episode+1)%args.replay_interval==0):
-        print("Best WL: ", max(rewards)*1000, "Best WL episode: ", rewards.index(max(rewards)) + 1)
+        print("Best WL: ", max(WLs)*1000, "Best WL episode: ", WLs.index(max(WLs)) + 1)
         agent.replay()
 
     if((episode+1)%args.save_interval==0):
@@ -498,12 +502,12 @@ def plot_running_avg(totalrewards):
     print("Running Average")
     print(df1)
 
-plot_running_avg(rewards)
+plot_running_avg(WLs)
 
 f = open("results", "a")
-f.write("Best WL: " + str(max(rewards)*1000) + " Number: " + str(args.filename) + "\n")
-f.write("OneShot WL: " + str(rewards[0]*1000) + " Number: " + str(args.filename) + "\n")
+f.write("Best WL: " + str(min(WLs)) + " Number: " + str(args.filename) + "\n")
+f.write("OneShot WL: " + str(WLs[0]) + " Number: " + str(args.filename) + "\n")
 f.close()
-print("Best WL: ", max(rewards)*1000,"Best WL episode: ", rewards.index(max(rewards)) + 1)
-print("OneShot WL: ", rewards[0]*1000,"OneShot WL episode: ", 1)
+print("Best WL: ", min(WLs),"Best WL episode: ", WLs.index(min(WLs)) + 1)
+print("OneShot WL: ", WLs[0],"OneShot WL episode: ", 1)
 
