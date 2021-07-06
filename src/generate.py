@@ -164,7 +164,7 @@ for i in range(trainSize):
             break
 
 
-    boardN, blocksN, connGraphsMin, connGraphsMax = generateBoard((args.grid_size, args.grid_size), horizontalLines, verticalLines, [0.2, 0.55, 0.25], 0.25)
+    boardN, blocksN, connGraphsMin, connGraphsMax = generateBoard((args.grid_size, args.grid_size), horizontalLines, verticalLines, [0.2, 0.55, 0.25], 0.15)
 
     blockages, blocks = [], []
 
